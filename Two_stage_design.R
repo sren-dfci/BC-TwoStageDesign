@@ -15,29 +15,41 @@ optimalTwoStageDesign <- function(a, b, p0, p1) {
   p_bar <- (p0 + p1) / 2
   n_start <- floor(p_bar * (1 - p_bar) * ((qnorm(1 - a) + qnorm(1 - b)) / (p1 - p0))**2)
   n_min <- max(n_start - 20, 10)
-  n_max <- min(n_start + 30, 80)
+  n_max <- min(n_start + 30, 90)
   cat("The recommended lower value of n is:", n_start, "\n")
   cat("Search between", n_min, "and", n_max, "\n\n")
+  # record the smallest EN and n
+  n_optimal <- 1000
+  en_min <- 1000
   for (n in n_min:n_max) {
     for (n1 in 1:(n - 1)) {
+      # if the sample size for the first stage is larger than the min(EN), stop
+      if (n1 >= n_optimal) {break}
       for (r1 in 1:(n1 - 1)) {
         # prob of early stop
         PET <- pbinom(r1, n1, p0)
         # expected total
         EN <- n1 + (1 - PET) * (n - n1)
-        r_max <- r1
+        r_max <- NULL
         p1_reject_current <- NULL
         for (r in (r1 + 1):(n - 1)) {
+          # check type 2 error
           p1_reject <- probReject(r1, r, p1, n1, n - n1)
-          if (p1_reject <= b & r > r_max) {
+          if (p1_reject < b) {
             r_max <- r
             p1_reject_current <- p1_reject
           }
         }
         # if found the r met the type II error
-        if (r_max != r1) {
+        if (!is.null(r_max)) {
+          # check type 1 error
           p0_reject <- probReject(r1, r_max, p0, n1, n - n1)
           if (p0_reject >= 1 - a) {
+            # record EN and n for optimal design
+            if (EN < en_min) {
+              en_min <- EN
+              n_optimal <- n
+            }
             .ls[["n"]] <- c(.ls[["n"]], n)
             .ls[["n1"]] <- c(.ls[["n1"]], n1)
             .ls[["r1"]] <- c(.ls[["r1"]], r1)
@@ -56,15 +68,17 @@ optimalTwoStageDesign <- function(a, b, p0, p1) {
   } else {
     .df <- as.data.frame(.ls)
     rownames(.df) <- NULL
-    cat("The Optimal design output is:\n")
+    # print out optimal design
+    cat("\nThe Optimal design output is:\n")
     print(round(.df[which.min(.df$EN), ], 4))
+    # print out minmax design
     cat("\nThe MiniMax design output is:\n")
-    print(round(.df[which.min(.df$n), ], 4))
+    print(round(subset(a, n == min(n) & EN == min(EN[n == min(n)])), 4))
     return(.df)
   }
 }
 tic()
-a <- optimalTwoStageDesign(0.1, 0.1, 0.24, 0.4)
+a <- optimalTwoStageDesign(0.1, 0.1, 0.25, 0.4)
 toc()
 
 # library(data.table)
